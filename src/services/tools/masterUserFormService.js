@@ -8,7 +8,7 @@ const getCabangList = async () => {
   return rows.map((r) => r.cabang);
 };
 
-// ── Daftar menu (men_modul=1 = Finance) ──────────────────────────────
+// ── Daftar menu (men_modul=1 = Kalkulasi) ──────────────────────────────
 const getAllMenus = async () => {
   const [rows] = await db.query(
     `SELECT

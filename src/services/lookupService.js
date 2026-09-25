@@ -3,7 +3,7 @@ const db = require("../config/database");
 /**
  * lookupService
  * Kumpulan query lookup generik yang dipakai di berbagai form.
- * Tambah fungsi di sini sesuai kebutuhan modul Finance.
+ * Tambah fungsi di sini sesuai kebutuhan modul Kalkulasi.
  */
 
 const getSupplier = async (search = "") => {

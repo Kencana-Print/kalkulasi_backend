@@ -10,4 +10,13 @@ const getSummary = async (req, res) => {
   }
 };
 
-module.exports = { getSummary };
+const getTodayActivity = async (req, res) => {
+  try {
+    const data = await svc.getTodayActivity();
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+module.exports = { getSummary, getTodayActivity };

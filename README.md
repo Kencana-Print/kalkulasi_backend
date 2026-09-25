@@ -1,6 +1,6 @@
-# FINANCE Backend — Express.js
+# KALKULASI Backend — Express.js
 
-Backend API untuk modul Finance, migrasi dari Delphi desktop ke web-based.
+Backend API untuk aplikasi Kalkulasi Harga, migrasi dari Delphi desktop ke web-based.
 
 ---
 
@@ -16,7 +16,7 @@ Backend API untuk modul Finance, migrasi dari Delphi desktop ke web-based.
 ## Struktur Direktori
 
 ```
-finance-backend/
+kalkulasi-backend/
 ├── src/
 │   ├── config/
 │   │   └── database.js           # MySQL connection pool
@@ -47,7 +47,7 @@ finance-backend/
 
 ```bash
 # 1. Clone / copy project
-cd finance-backend
+cd kalkulasi-backend
 
 # 2. Install dependencies
 npm install
@@ -140,7 +140,7 @@ router.delete("/form/:nomor", verifyToken, checkPermission(menuId, "delete"), co
 
 ## Tambah Modul Baru
 
-Ikuti langkah ini untuk setiap modul Finance baru (contoh: Kas Masuk):
+Ikuti langkah ini untuk setiap modul Kalkulasi baru (contoh: Kas Masuk):
 
 1. **Buat service**: `src/services/kasbank/kasMasukFormService.js`
 2. **Buat controller**: `src/controllers/kasbank/kasMasukFormController.js`

@@ -34,7 +34,7 @@ const verifyToken = (req, res, next) => {
  * checkPermission(menuId, action)
  * action: 'view' | 'insert' | 'edit' | 'delete' | 'print'
  *
- * Sesuaikan query dengan tabel hak akses di DB Finance Anda.
+ * Sesuaikan query dengan tabel hak akses di DB Kalkulasi Anda.
  * Contoh ini menggunakan tabel tuser_menu yang sama seperti garmen.
  */
 const checkPermission = (menuId, action) => {

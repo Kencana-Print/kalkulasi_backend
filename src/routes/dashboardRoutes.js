@@ -6,4 +6,7 @@ const { verifyToken } = require("../middleware/authMiddleware");
 // Endpoint: GET /api/dashboard/summary
 router.get("/summary", verifyToken, ctrl.getSummary);
 
+// Endpoint: GET /api/dashboard/today-activity
+router.get("/today-activity", verifyToken, ctrl.getTodayActivity);
+
 module.exports = router;

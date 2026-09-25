@@ -1,244 +1,83 @@
 const db = require("../config/database");
 
+// Tiap seksi dibungkus agar satu tabel warisan modul finance yang tidak ada
+// di DB kalkulasi (mis. tkasbon) tidak menggugurkan seluruh summary —
+// seksi yang gagal pakai nilai default aman dan error dicatat di log backend.
+const q = async (label, sql, params = [], fallback = { count: 0, total: 0 }) => {
+  try {
+    const [[row]] = await db.query(sql, params);
+    return row || { ...fallback };
+  } catch (e) {
+    console.error(`[dashboard] ${label} gagal: ${e.message}`);
+    return { ...fallback };
+  }
+};
+
+const qa = async (label, sql, params = []) => {
+  try {
+    const [rows] = await db.query(sql, params);
+    return rows;
+  } catch (e) {
+    console.error(`[dashboard] ${label} gagal: ${e.message}`);
+    return [];
+  }
+};
+
 const getSummary = async (cabang) => {
-  // 1. Kasbon belum selesai
-  let kasbonSql = `
-    SELECT COUNT(*) AS count, IFNULL(SUM(bon_nominal), 0) AS total
-    FROM tkasbon
-    WHERE bon_selesai = 0
-  `;
-  const kasbonParams = [];
-  if (cabang && cabang !== "P01" && cabang !== "ALL") {
-    kasbonSql += ` AND bon_cabang = ?`;
-    kasbonParams.push(cabang);
-  }
-  const [[kasbonRow]] = await db.query(kasbonSql, kasbonParams);
-
-  // 2. Pengajuan transfer menunggu realisasi
-  const [[pjtRow]] = await db.query(`
-    SELECT COUNT(*) AS count, IFNULL(SUM(ptd_nominal), 0) AS total
-    FROM tpengajuan_transfer_dtl
-    WHERE (ptd_jur_no = '' OR ptd_jur_no IS NULL)
-      AND (ptd_batal = '' OR ptd_batal IS NULL)
-  `);
-
-  // 3. Terima setoran belum verifikasi (fsk_userv kosong)
-  // Filter LEFT(fsk_nomor,3) jika bukan pusat
-  let setoranSql = `
-    SELECT COUNT(*) AS count
-    FROM retail.tform_setorkasir_hdr
-    WHERE (fsk_userv = '' OR fsk_userv IS NULL)
-  `;
-  const setoranParams = [];
-  if (cabang && cabang !== "P01" && cabang !== "ALL") {
-    setoranSql += ` AND LEFT(fsk_nomor, 3) = ?`;
-    setoranParams.push(cabang);
-  }
-  const [[setoranRow]] = await db.query(setoranSql, setoranParams);
-
-  // 4. Server date
-  const [[dateRow]] = await db.query(
+   // 4. Server date
+  const dateRow = await q(
+    "serverDate",
     `SELECT DATE_FORMAT(NOW(),'%Y-%m-%d') AS serverDate`,
+    [],
+    { serverDate: "" }
   );
 
-  // 5. Saldo Kas & Saldo Bank — per cabang
-  const kasPrefix = "A-111";
-  const bankPrefix1 = "A-112";
-  const bankPrefix2 = "B-211";
-
-  // Ambil semua account kas milik cabang ini
-  const [kasAccounts] = await db.query(
-    `SELECT rek_kode FROM trekening
-   WHERE LEFT(rek_kode,5) = ? AND rek_cabang = ? AND rek_isaktif = 0`,
-    [kasPrefix, cabang],
+  // 10. Permintaan Harga per status (tahun berjalan) — kartu Tugas Menunggu
+  // BELUM / MINTA / NEGO / WAIT dari kencanaprint.tmintaharga
+  const mhRows = await qa(
+    "mintaharga-status",
+    `SELECT mh_status AS status, COUNT(*) AS count
+     FROM kencanaprint.tmintaharga
+     WHERE mh_tanggal >= MAKEDATE(YEAR(CURDATE()), 1)
+       AND mh_status IN ('BELUM', 'MINTA', 'NEGO', 'WAIT')
+     GROUP BY mh_status`
   );
-
-  const [bankAccounts] = await db.query(
-    `SELECT rek_kode FROM trekening
-   WHERE (LEFT(rek_kode,5) = ? OR LEFT(rek_kode,5) = ?)
-     AND rek_cabang = ? AND rek_isaktif = 0`,
-    [bankPrefix1, bankPrefix2, cabang],
-  );
-
-  const sumSaldo = async (rekKodes) => {
-    if (!rekKodes.length) return 0;
-    const placeholders = rekKodes.map(() => "?").join(",");
-    const [[row]] = await db.query(
-      `SELECT IFNULL(SUM(b.jurd_debet - b.jurd_kredit), 0) AS saldo
-     FROM tjurnalitem b
-     LEFT JOIN tjurnal a ON a.jur_no = b.jurd_jur_no
-     WHERE b.jurd_nourut = 0
-       AND b.jurd_rek_kode IN (${placeholders})
-       AND a.jur_tanggal <= CURDATE()`,
-      rekKodes,
-    );
-    return Number(row.saldo);
-  };
-
-  const saldoKas = await sumSaldo(kasAccounts.map((r) => r.rek_kode));
-  const saldoBank = await sumSaldo(bankAccounts.map((r) => r.rek_kode));
-
-  // Ambil satu kode representatif untuk ditampilkan di label (opsional)
-  const defaultKasAccount = kasAccounts[0]?.rek_kode || "-";
-  const defaultBankAccount = bankAccounts[0]?.rek_kode || "-";
-
-  // 6. Rekonsiliasi — jumlah yang selisih ≠ 0 bulan ini
-  const [[rekonRow]] = await db.query(
-    `SELECT COUNT(*) AS count
-     FROM (
-       SELECT v.rkv_rek_kode,
-         (v.rkv_koran  + IFNULL(SUM(b.rk_nominal),0) - IFNULL(SUM(d.rk_nominal),0))
-         - (v.rkv_saldo + IFNULL(SUM(a.rk_nominal),0) - IFNULL(SUM(c.rk_nominal),0)) AS selisih
-       FROM trekon_valid v
-       LEFT JOIN trekon_det  a ON a.rk_rek_kode=v.rkv_rek_kode AND a.rk_tanggal=v.rkv_tanggal
-       LEFT JOIN trekon_det3 c ON c.rk_rek_kode=v.rkv_rek_kode AND c.rk_tanggal=v.rkv_tanggal
-       LEFT JOIN trekon_det2 b ON b.rk_rek_kode=v.rkv_rek_kode AND b.rk_tanggal=v.rkv_tanggal
-       LEFT JOIN trekon_det4 d ON d.rk_rek_kode=v.rkv_rek_kode AND d.rk_tanggal=v.rkv_tanggal
-       WHERE YEAR(v.rkv_tanggal)  = YEAR(CURDATE())
-         AND MONTH(v.rkv_tanggal) = MONTH(CURDATE())
-       GROUP BY v.rkv_rek_kode, v.rkv_tanggal
-     ) x
-     WHERE x.selisih <> 0`,
-  );
-
-  // 7. Stok Finance — jumlah item REAL negatif di cabang
-  const [[stokRow]] = await db.query(
-    `SELECT COUNT(*) AS count
-     FROM (
-       SELECT mst_brg_kode,
-         SUM(mst_stok_in - mst_stok_out) AS stk
-       FROM finance.tmasterstok_finance
-       WHERE mst_aktif = 'Y' AND mst_cab = ?
-       GROUP BY mst_brg_kode
-     ) x
-     LEFT JOIN (
-       SELECT msod_brg_kode,
-         IFNULL(SUM(msod_jumlah), 0) AS mutasi
-       FROM kencanaprint.tgarmenmso_hdr h
-       INNER JOIN kencanaprint.tgarmenmso_dtl d ON d.msod_nomor = h.mso_nomor
-       WHERE h.mso_msi_nomor = '' AND h.mso_cab = ? AND h.mso_bagian = 'FINANCE'
-       GROUP BY msod_brg_kode
-     ) m ON m.msod_brg_kode = x.mst_brg_kode
-     WHERE (x.stk - IFNULL(m.mutasi, 0)) < 0`,
-    [cabang, cabang],
-  );
-
-  // 8. Voucher Pembayaran belum diinputkan ke Pengajuan Transfer
-  const [[voucherPtRow]] = await db.query(
-    `SELECT COUNT(*) AS count, IFNULL(SUM(vou_total - IFNULL(vou_disc,0)), 0) AS total
-      FROM kencanaprint.tvoucher_hdr h
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM finance.tpengajuan_transfer_dtl d
-        WHERE d.ptd_trs = h.vou_nomor
-      )`,
-  );
-
-  // 9. Daftar Hutang — Berbagai jenis BPB/Nota yang belum terbayar lunas (Sisa > 0)
-  const [[hutangRow]] = await db.query(
-    `SELECT
-        COUNT(*) AS count,
-        IFNULL(SUM(x.Sisa), 0) AS total
-      FROM (
-        -- 1. PBG (BPB dari PO)
-        SELECT h.bpb_nomor AS Nomor,
-          ROUND(SUM(
-            (d.bpbd_harga * (100 - d.bpbd_disc) / 100) * d.bpbd_jumlah *
-            IF(p.po_status_ppn = 1, (100 + p.po_ppn) / 100, 1)
-          ), 2) - IFNULL((SELECT SUM(voud_total) FROM kencanaprint.tvoucher_dtl WHERE voud_nota = h.bpb_nomor), 0) AS Sisa
-        FROM kencanaprint.tbpb_hdr h
-        INNER JOIN kencanaprint.tbpb_dtl d ON d.bpbd_bpb_nomor = h.bpb_nomor
-        INNER JOIN kencanaprint.tpo_hdr p ON p.po_nomor = h.bpb_po_nomor
-        GROUP BY h.bpb_nomor
-        HAVING Sisa > 0
-
-        UNION ALL
-
-        -- 2. BJG (BPJ dari PO Jasa)
-        SELECT h.bpj_nomor AS Nomor,
-          ROUND(
-            p.pojh_tarif * h.bpj_jumlah *
-            IF(p.pojh_status_ppn = 1, ((100 + p.pojh_ppn) / 100), 1)
-          , 2) - IFNULL((SELECT SUM(voud_total) FROM kencanaprint.tvoucher_dtl WHERE voud_nota = h.bpj_nomor), 0) AS Sisa
-        FROM kencanaprint.tbpj_hdr h
-        INNER JOIN kencanaprint.tpojasa_hdr p ON p.pojh_nomor = h.bpj_po_nomor
-        GROUP BY h.bpj_nomor
-        HAVING Sisa > 0
-
-        UNION ALL
-
-        -- 3. POE (PO External)
-        SELECT h.poe_nomor AS Nomor,
-          (h.poe_total - IFNULL((SELECT SUM(c.poed2_nominal) FROM kencanaprint.tpoexternal_dtl2 c WHERE c.poed2_nomor = h.poe_nomor), 0))
-          - IFNULL((SELECT SUM(voud_total) FROM kencanaprint.tvoucher_dtl WHERE voud_nota = h.poe_nomor), 0) AS Sisa
-        FROM kencanaprint.tpoexternal_hdr h
-        GROUP BY h.poe_nomor
-        HAVING Sisa > 0
-
-        UNION ALL
-
-        -- 4. MMT (Penerimaan Mutasi)
-        SELECT h.rec_nomor AS Nomor,
-          IFNULL((
-            SELECT SUM(IF(d.recd_harga < 200000, d.recd_harga * d.recd_qty_terima, d.recd_harga))
-            FROM kencanaprint.trec_mmt_dtl d
-            WHERE d.recd_rec_nomor = h.rec_nomor
-          ), 0) - IFNULL((SELECT SUM(voud_total) FROM kencanaprint.tvoucher_dtl WHERE voud_nota = h.rec_nomor), 0) AS Sisa
-        FROM kencanaprint.trec_mmt_hdr h
-        GROUP BY h.rec_nomor
-        HAVING Sisa > 0
-
-        UNION ALL
-
-        -- 5. BPE (BPB PO External)
-        SELECT h.bpe_nomor AS Nomor,
-          IFNULL(poe.poe_total, 0) - IFNULL((SELECT SUM(voud_total) FROM kencanaprint.tvoucher_dtl WHERE voud_nota = h.bpe_nomor), 0) AS Sisa
-        FROM kencanaprint.tbpbpoexternal_hdr h
-        LEFT JOIN kencanaprint.tpoexternal_hdr poe ON poe.poe_nomor = h.bpe_po
-        GROUP BY h.bpe_nomor
-        HAVING Sisa > 0
-
-        UNION ALL
-
-        -- 6. BPG (Garmen BPB)
-        SELECT h.bpb_nomor AS Nomor,
-          IFNULL((
-            SELECT SUM(d.bpbd_jumlah * d.bpbd_harga)
-            FROM kencanaprint.tgarmenbpb_dtl d
-            WHERE d.bpbd_nomor = h.bpb_nomor
-          ), 0) - IFNULL((SELECT SUM(voud_total) FROM kencanaprint.tvoucher_dtl WHERE voud_nota = h.bpb_nomor), 0) AS Sisa
-        FROM kencanaprint.tgarmenbpb_hdr h
-        GROUP BY h.bpb_nomor
-        HAVING Sisa > 0
-      ) x`,
-  );
+  const mhCount = (st) =>
+    Number((mhRows.find((r) => r.status === st) || {}).count || 0);
 
   return {
-    kasbon: { count: Number(kasbonRow.count), total: Number(kasbonRow.total) },
-    transfer: { count: Number(pjtRow.count), total: Number(pjtRow.total) },
-    setoran: { count: Number(setoranRow.count) },
+
     serverDate: dateRow.serverDate,
-    // Ganti saldoKas tunggal jadi dua kategori:
-    saldo: {
-      kas: {
-        account: defaultKasAccount,
-        saldo: saldoKas,
-        count: kasAccounts.length,
-      },
-      bank: {
-        account: defaultBankAccount,
-        saldo: saldoBank,
-        count: bankAccounts.length,
-      },
-    },
-    rekon: { selisihCount: Number(rekonRow.count) },
-    stok: { negativeCount: Number(stokRow.count) },
-    voucherPt: {
-      count: Number(voucherPtRow.count),
-      total: Number(voucherPtRow.total),
-    },
-    hutang: { count: Number(hutangRow.count), total: Number(hutangRow.total) },
+        
+    belum: { count: mhCount("BELUM") },
+    minta: { count: mhCount("MINTA") },
+    nego: { count: mhCount("NEGO") },
+    wait: { count: mhCount("WAIT") },
   };
 };
 
-module.exports = { getSummary };
+const getTodayActivity = async () => {
+  // Aktivitas Hari Ini — 9 kolom: data kalkulasi (hdr) + permintaan (tmintaharga).
+  // Filter tetap basis permintaan user: mh_date_kalkulasi hari ini + nomor
+  // kalkulasi terdaftar di tkalkulasi2_hdr.
+  const rows = await qa(
+    "today-activity",
+    `SELECT k.kal_nomor AS NoKalkulasi,
+            date_format(IFNULL(k.date_modified, k.date_create),'%d-%m-%Y %T') AS TglKalkulasi,
+            h.mh_status AS Status,
+            k.user_create AS Created,
+            k.user_modified AS Modified,
+            h.mh_nomor AS NoPermintaan,
+            date_format(h.mh_tanggal,'%d-%m-%Y') AS TglPermintaan,
+            h.user_create AS Peminta,
+            h.mh_nama AS NamaPermintaan,
+            date_format(IFNULL(h.date_modified, h.date_create),'%d-%m-%Y %T') AS DateCreate
+     FROM kalkulasi.tkalkulasi2_hdr k
+     INNER JOIN kencanaprint.tmintaharga h ON h.mh_nomor_kalkulasi=k.kal_nomor
+     WHERE DATE(k.kal_tanggal)=CURDATE()
+     ORDER BY IFNULL(k.date_modified, k.date_create)`
+  );
+  return rows;
+};
+
+module.exports = { getSummary, getTodayActivity };

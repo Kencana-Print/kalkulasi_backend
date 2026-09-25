@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 
 /**
  * Login user
- * Sesuaikan nama tabel & kolom dengan DB Finance Anda.
+ * Sesuaikan nama tabel & kolom dengan DB Kalkulasi Anda.
  * Contoh menggunakan tabel tuser yang sama seperti garmen.
  */
 const login = async (username, password) => {
