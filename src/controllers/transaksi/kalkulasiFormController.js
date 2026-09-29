@@ -137,6 +137,17 @@ const searchModelKerja = async (req, res) => {
   }
 };
 
+const searchKalkulasi = async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: await service.searchKalkulasi({ q: req.query.q, exclude: req.query.exclude }),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const getModelKerja = async (req, res) => {
   try {
     const { khKode } = req.query;
@@ -291,6 +302,7 @@ module.exports = {
   save,
   getPpnGlobal,
   searchModelKerja,
+  searchKalkulasi,
   getModelKerja,
   getGramasi,
   getHargaKain,

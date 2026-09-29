@@ -62,6 +62,9 @@ router.get("/ppn-default", verifyToken, controller.getPpnGlobal);
 router.get("/model-kerja/cari", verifyToken, controller.searchModelKerja);
 router.get("/model-kerja", verifyToken, controller.getModelKerja);
 
+// Bantuan F1 "Load Kalkulasi From" — cukup verifyToken (lookup, bukan data sensitif level record)
+router.get("/kalkulasi/cari", verifyToken, controller.searchKalkulasi);
+
 router.get("/gramasi", verifyToken, controller.getGramasi);
 router.get("/harga-kain", verifyToken, controller.getHargaKain);
 router.get("/rib-babaran", verifyToken, controller.getRibBabaran);

@@ -33,6 +33,27 @@ const searchModelKerja = async (q) => {
   return rows;
 };
 
+// ── Bantuan F1 "Load Kalkulasi From" (edtNomor2KeyDown) ──
+// SELECT kal_nomor, kal_tanggal, kal_project, kal_cus FROM tkalkulasi2_hdr
+// WHERE kal_nomor <> edtnomor ORDER BY kal_nomor DESC, filter Nomor/Project/Customer.
+const searchKalkulasi = async ({ q, exclude }) => {
+  const like = `%${q || ""}%`;
+  const params = [like, like, like];
+  let sql = `SELECT h.kal_nomor AS nomor,
+             DATE_FORMAT(h.kal_tanggal, '%d-%m-%Y') AS tanggal,
+             h.kal_project AS project,
+             h.kal_cus AS customer
+      FROM tkalkulasi2_hdr h
+      WHERE (h.kal_nomor LIKE ? OR h.kal_project LIKE ? OR h.kal_cus LIKE ?)`;
+  if (exclude) {
+    sql += ` AND h.kal_nomor <> ?`;
+    params.push(exclude);
+  }
+  sql += ` ORDER BY h.kal_nomor DESC LIMIT 100`;
+  const [rows] = await db.query(sql, params);
+  return rows;
+};
+
 const getModelKerja = async (khKode) => {
   const [[model]] = await db.query(
     `SELECT kh_nama AS nama, kh_warna AS warna FROM tkerja_hdr WHERE kh_kode = ?`,
@@ -876,6 +897,7 @@ const deleteKalkulasi = async (nomor) => {
 module.exports = {
   getPpnGlobal,
   searchModelKerja,
+  searchKalkulasi,
   getModelKerja,
   getJenisKainOptions,
   getGramasi,
