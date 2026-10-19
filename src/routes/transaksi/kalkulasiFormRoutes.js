@@ -79,6 +79,7 @@ router.get("/sublim-harga", verifyToken, controller.getHargaSublim);
 
 router.get("/margin", verifyToken, controller.getMargin);
 router.get("/min-cetak", verifyToken, controller.getMinCetak);
+router.get("/info-pembayaran", verifyToken, controller.getInfoPembayaran);
 
 // Proxy gambar desain Minta Harga — SENGAJA tanpa verifyToken karena
 // <img> browser tidak bisa membawa header JWT (lihat controller).

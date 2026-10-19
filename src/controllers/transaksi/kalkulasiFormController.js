@@ -273,6 +273,15 @@ const getMinCetak = async (req, res) => {
   }
 };
 
+const getInfoPembayaran = async (req, res) => {
+  try {
+    const { customer } = req.query;
+    res.json({ success: true, data: await service.getInfoPembayaran(customer) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const getBrowse = async (req, res) => {
   try {
     const { startDate, endDate, jenis } = req.query;
@@ -316,6 +325,7 @@ module.exports = {
   getHargaSublim,
   getMargin,
   getMinCetak,
+  getInfoPembayaran,
   getBrowse,
   deleteKalkulasi,
 };

@@ -269,6 +269,67 @@ const getMinCetak = async ({ qtyOrder, grade }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
+// INFO PEMBAYARAN CUSTOMER — aging Lunas / Belum Lunas per lama_hari.
+// Selalu kembalikan 6 baris kategori (0-30 ... >90) via LEFT JOIN, persis
+// query referensi user. `customer` = kode customer (piutang_debet.customer,
+// cth '00078') — diambil dari mh_cus_kode.
+// ═══════════════════════════════════════════════════════════════════════
+
+const INFO_BAYAR_DEFAULT = [
+  { lama_hari: "0-30", lunas: null, belumLunas: null },
+  { lama_hari: "31-45", lunas: null, belumLunas: null },
+  { lama_hari: "46-60", lunas: null, belumLunas: null },
+  { lama_hari: "61-75", lunas: null, belumLunas: null },
+  { lama_hari: "76-90", lunas: null, belumLunas: null },
+  { lama_hari: ">90", lunas: null, belumLunas: null },
+];
+
+const getInfoPembayaran = async (customer) => {
+  const kode = String(customer || "").trim();
+  if (!kode) return INFO_BAYAR_DEFAULT;
+  const [rows] = await db.query(
+    `SELECT
+       kategori.lama_hari,
+       ROUND(SUM(CASE WHEN d.kredit >= d.debet THEN d.debet ELSE NULL END)) AS lunas,
+       ROUND(SUM(CASE WHEN d.kredit < d.debet THEN (d.debet - d.kredit) ELSE NULL END)) AS belumLunas
+     FROM (
+       SELECT '0-30' AS lama_hari, 0 AS min_hari, 30 AS max_hari UNION ALL
+       SELECT '31-45', 31, 45 UNION ALL
+       SELECT '46-60', 46, 60 UNION ALL
+       SELECT '61-75', 61, 75 UNION ALL
+       SELECT '76-90', 76, 90 UNION ALL
+       SELECT '>90', 91, 999999
+     ) kategori
+     LEFT JOIN (
+       SELECT DISTINCT
+         a.nota,
+         a.debet,
+         a.kredit,
+         DATEDIFF(x.tglbyr, a.tanggal) AS lama
+       FROM kencanaprint.piutang_debet a
+       INNER JOIN (
+         SELECT b.nota, MAX(c.tanggal) AS tglbyr
+         FROM kencanaprint.piutang_kredit_detail b
+         LEFT JOIN kencanaprint.terima_bayar_debet c ON c.nomor = b.no_bukti
+         WHERE b.kode IN ('BT','CS','BG')
+         GROUP BY b.nota
+         HAVING MAX(c.tanggal) >= DATE_SUB(NOW(), INTERVAL 1 YEAR)
+       ) x ON x.nota = a.nota
+       WHERE a.flag = 0 AND a.is_writeoff = 0 AND a.customer = ?
+     ) d ON d.lama BETWEEN kategori.min_hari AND kategori.max_hari
+     GROUP BY kategori.lama_hari, kategori.min_hari
+     ORDER BY kategori.min_hari`,
+    [kode],
+  );
+  if (!rows || rows.length === 0) return INFO_BAYAR_DEFAULT;
+  return rows.map((r) => ({
+    lama_hari: r.lama_hari,
+    lunas: r.lunas === null ? null : Number(r.lunas),
+    belumLunas: r.belumLunas === null ? null : Number(r.belumLunas),
+  }));
+};
+
+// ═══════════════════════════════════════════════════════════════════════
 // DETAIL — Kalkulasi aktif (skema tkalkulasi2_*). Replikasi loaddataall.
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -380,6 +441,7 @@ const getDetail = async (nomor) => {
     rpLaba: num(h.kal_rplaba),
     allowancePersen: num(h.kal_allowance),
     rpAllowance: num(h.kal_rpallowance),
+    marginTambahan: num(h.kal_margin_tambahan),
     rpSesuai: num(h.kal_rpsesuai),
     ppn: num(h.kal_ppn),
     rpSesuaiPpn: num(h.kal_rpsesuaippn),
@@ -535,6 +597,8 @@ const getNego = async (nomor) => {
     rpLaba: num(h.kal_rplaba),
     allowancePersen: num(h.kal_allowance),
     rpAllowance: num(h.kal_rpallowance),
+    // Tabel legacy kalkulasi.tkalkulasi_hdr tidak punya kal_margin_tambahan
+    marginTambahan: 0,
     rpSesuai: num(h.kal_rpsesuai),
     ppn: num(h.kal_ppn),
     rpSesuaiPpn: num(h.kal_rpsesuaippn),
@@ -634,13 +698,13 @@ const saveData = async (payload, user) => {
         `UPDATE tkalkulasi2_hdr SET
            kal_project = ?, kal_tanggal = ?, kal_cus = ?, kal_kh_kode = ?, kal_rencanaorder = ?,
            kal_persen = ?, kal_laba = ?, kal_rplaba = ?, kal_allowance = ?, kal_rpallowance = ?,
-           kal_rpsesuai = ?, kal_ppn = ?, kal_rpsesuaippn = ?, kal_ket = ?, kal_pakaiobat = ?,
+           kal_margin_tambahan = ?, kal_rpsesuai = ?, kal_ppn = ?, kal_rpsesuaippn = ?, kal_ket = ?, kal_pakaiobat = ?,
            kal_ketbeli = ?, user_modified = ?, date_modified = NOW()
          WHERE kal_nomor = ?`,
         [
           header.project, header.tanggal, header.cus, header.khKode, num(header.rencanaOrder),
           yn(header.pakaiPersen), num(header.labaPersen), num(header.rpLaba), num(header.allowancePersen), num(header.rpAllowance),
-          num(header.rpSesuai), num(header.ppn), num(header.rpSesuaiPpn), header.ket || "", yn(header.pakaiObat),
+          num(header.marginTambahan), num(header.rpSesuai), num(header.ppn), num(header.rpSesuaiPpn), header.ket || "", yn(header.pakaiObat),
           header.ketBeli || "", user, nomor,
         ],
       );
@@ -649,12 +713,12 @@ const saveData = async (payload, user) => {
       await conn.query(
         `INSERT INTO tkalkulasi2_hdr
            (kal_nomor, kal_project, kal_tanggal, kal_cus, kal_kh_kode, kal_rpallowance, kal_allowance,
-            kal_rpsesuai, kal_ppn, kal_rpsesuaippn, kal_rencanaorder, kal_rplaba, kal_laba, kal_persen,
+            kal_margin_tambahan, kal_rpsesuai, kal_ppn, kal_rpsesuaippn, kal_rencanaorder, kal_rplaba, kal_laba, kal_persen,
             kal_ket, kal_pakaiobat, kal_ketbeli, user_create, date_create)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           nomor, header.project, header.tanggal, header.cus, header.khKode, num(header.rpAllowance), num(header.allowancePersen),
-          num(header.rpSesuai), num(header.ppn), num(header.rpSesuaiPpn), num(header.rencanaOrder), num(header.rpLaba), num(header.labaPersen), yn(header.pakaiPersen),
+          num(header.marginTambahan), num(header.rpSesuai), num(header.ppn), num(header.rpSesuaiPpn), num(header.rencanaOrder), num(header.rpLaba), num(header.labaPersen), yn(header.pakaiPersen),
           header.ket || "", yn(header.pakaiObat), header.ketBeli || "", user,
         ],
       );
@@ -912,6 +976,7 @@ module.exports = {
   getHargaSublim,
   getMargin,
   getMinCetak,
+  getInfoPembayaran,
   getDetail,
   getMintaHarga,
   getNego,
