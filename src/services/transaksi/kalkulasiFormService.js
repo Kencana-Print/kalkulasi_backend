@@ -551,7 +551,7 @@ const getMintaHarga = async (mhNomor) => {
   };
 
   // Replikasi: "if (nokals<>'') and (mh_status='NEGO') then loadNego(nokals)"
-  const nego = h.nokals && h.mh_status === "NEGO" ? await getNego(h.nokals) : null;
+  const nego = h.nokals && ["NEGO", "BELUM DIVERIFIKASI"].includes(h.mh_status) ? await getNego(h.nokals) : null;
 
   return { header, nego };
 };
@@ -599,7 +599,7 @@ const getNego = async (nomor) => {
     rpAllowance: num(h.kal_rpallowance),
     // Tabel legacy kalkulasi.tkalkulasi_hdr tidak punya kal_margin_tambahan
     marginTambahan: 0,
-    rpSesuai: num(h.kal_rpsesuai),
+    rpSesuai: num(h.kal_rpsales),
     ppn: num(h.kal_ppn),
     rpSesuaiPpn: num(h.kal_rpsesuaippn),
   };

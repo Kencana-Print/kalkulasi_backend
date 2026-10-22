@@ -9,7 +9,7 @@ const getDivisi = async () => {
 };
 
 // ── Browse Master ─────────────────────────────────────────────────────
-const VALID_STATUS = ["BELUM", "MINTA", "NEGO", "WAIT", "CANCEL", "DONE"];
+const VALID_STATUS = ["BELUM", "MINTA", "NEGO", "WAIT", "CANCEL", "DONE","BELUM DIVERIFIKASI"];
 
 const getBrowse = async (startDate, endDate, divisi, status) => {
   let sql = `
@@ -91,7 +91,8 @@ const deleteKalkulasi = async (nomor, nomorKalkulasi) => {
            mh_nomor_pen2 = '', mh_harga_pen2 = 0,
            mh_sat = '', mh_date_kalkulasi = NULL,
            user_kalkulasi = '',
-           mh_status = if((SELECT COUNT(*) FROM tkalkulasi_hdr WHERE kal_mh_nomor=mh_nomor)=0,'MINTA','NEGO')
+           mh_status = if((SELECT COUNT(*) FROM tkalkulasi_hdr WHERE kal_mh_nomor=mh_nomor)=0,'MINTA',
+           if((SELECT kal_rpsales<kal_rpsistem FROM tkalkulasi_hdr WHERE kal_mh_nomor=mh_nomor)=1,'NEGO','BELUM DIVERIFIKASI'))
        WHERE mh_nomor = ?`,
       [nomor]
     );

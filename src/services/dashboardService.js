@@ -33,13 +33,13 @@ const getSummary = async (cabang) => {
   );
 
   // 10. Permintaan Harga per status (tahun berjalan) — kartu Tugas Menunggu
-  // BELUM / MINTA / NEGO / WAIT dari kencanaprint.tmintaharga
+  // BELUM / MINTA / NEGO / WAIT / BELUM DIVERIFIKASI dari kencanaprint.tmintaharga
   const mhRows = await qa(
     "mintaharga-status",
     `SELECT mh_status AS status, COUNT(*) AS count
      FROM kencanaprint.tmintaharga
      WHERE mh_tanggal >= MAKEDATE(YEAR(CURDATE()), 1)
-       AND mh_status IN ('BELUM', 'MINTA', 'NEGO', 'WAIT')
+       AND mh_status IN ('BELUM', 'MINTA', 'NEGO', 'WAIT', 'BELUM DIVERIFIKASI')
      GROUP BY mh_status`
   );
   const mhCount = (st) =>
@@ -53,6 +53,7 @@ const getSummary = async (cabang) => {
     minta: { count: mhCount("MINTA") },
     nego: { count: mhCount("NEGO") },
     wait: { count: mhCount("WAIT") },
+    belumVerif: { count: mhCount("BELUM DIVERIFIKASI") },
   };
 };
 
