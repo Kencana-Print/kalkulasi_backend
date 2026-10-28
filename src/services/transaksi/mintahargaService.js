@@ -133,9 +133,73 @@ const deletePenawaran2 = async (nomor) => {
   );
 };
 
+// ── Detail Komponen Bahan (Kalkulasi) ─────────────────────────────────
+const isYes = (v) => v === "Y" || v === "y" || v === 1 || v === true;
+const num = (v) => (v === null || v === undefined || v === "" ? 0 : Number(v));
+
+const getDetail = async (nomor) => {
+  let noKalkulasi = nomor;
+  const [[mh]] = await db.query(
+    `SELECT mh_nomor, mh_nomor_kalkulasi FROM kencanaprint.tmintaharga WHERE mh_nomor = ?`,
+    [nomor]
+  );
+  if (mh && mh.mh_nomor_kalkulasi) {
+    noKalkulasi = mh.mh_nomor_kalkulasi;
+  }
+
+  let rows = [];
+  if (noKalkulasi) {
+    [rows] = await db.query(
+      `SELECT * FROM tkalkulasi2_komponen WHERE kk_nomor = ? ORDER BY kk_nourut`,
+      [noKalkulasi]
+    );
+
+    if (rows.length === 0) {
+      try {
+        [rows] = await db.query(
+          `SELECT * FROM kalkulasi.tkalkulasi_komponen WHERE kk_nomor = ? ORDER BY kk_nourut`,
+          [noKalkulasi]
+        );
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+  if (rows.length === 0 && mh) {
+    try {
+      const [[hdr]] = await db.query(
+        `SELECT kal_nomor FROM kalkulasi.tkalkulasi_hdr WHERE kal_mh_nomor = ? LIMIT 1`,
+        [mh.mh_nomor]
+      );
+      if (hdr?.kal_nomor) {
+        [rows] = await db.query(
+          `SELECT * FROM kalkulasi.tkalkulasi_komponen WHERE kk_nomor = ? ORDER BY kk_nourut`,
+          [hdr.kal_nomor]
+        );
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return rows.map((r, idx) => ({
+    no: r.kk_nourut || idx + 1,
+    komponen: r.kk_komponen || "",
+    kg: isYes(r.kk_kg),
+    pabrik: isYes(r.kk_pabrik),
+    jenisKain: r.kk_jeniskain || "",
+    lengan: r.kk_lengan || "",
+    warna: r.kk_warna || "",
+    harga: num(r.kk_harga),
+    babaran: num(r.kk_babaran),
+  }));
+};
+
 module.exports = {
   getDivisi,
   getBrowse,
+  getDetail,
   deleteKalkulasi,
   deletePenawaran1,
   deletePenawaran2,

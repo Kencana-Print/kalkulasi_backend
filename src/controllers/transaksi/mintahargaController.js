@@ -24,6 +24,16 @@ const getBrowse = async (req, res) => {
   }
 };
 
+const getDetail = async (req, res) => {
+  try {
+    const { nomor } = req.params;
+    const data = await svc.getDetail(nomor);
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
 const deleteKalkulasi = async (req, res) => {
   try {
     const { nomor } = req.params;
@@ -58,6 +68,7 @@ const deletePenawaran2 = async (req, res) => {
 module.exports = {
   getDivisi,
   getBrowse,
+  getDetail,
   deleteKalkulasi,
   deletePenawaran1,
   deletePenawaran2,

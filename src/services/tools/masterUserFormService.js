@@ -30,8 +30,7 @@ const getDetail = async (kode) => {
        user_nama          AS nama,
        user_password      AS password,
        user_cabang        AS cabang,
-       user_aktif         AS aktif,
-       user_edit_report   AS editReport
+       user_aktif         AS aktif
      FROM tuser
      WHERE user_kode = ?`,
     [kode],
@@ -67,7 +66,6 @@ const save = async (data, isEdit) => {
          user_password     = ?,
          user_cabang       = ?,
          user_aktif        = ?,
-         user_edit_report  = ?,
          date_modify       = NOW()
        WHERE user_kode = ?`,
       [nama, password ?? "", cabang, aktif, editReport ?? 0, kode],
@@ -82,9 +80,9 @@ const save = async (data, isEdit) => {
     await db.query(
       `INSERT INTO tuser
          (user_kode, user_nama, user_password, user_cabang,
-          user_aktif, user_edit_report, date_create)
+          user_aktif, date_create)
        VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-      [kode, nama, password ?? "", cabang, aktif, editReport ?? 0],
+      [kode, nama, password ?? "", cabang, aktif ?? 0],
     );
   }
 

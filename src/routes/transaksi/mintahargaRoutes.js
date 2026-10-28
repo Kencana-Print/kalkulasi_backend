@@ -12,6 +12,7 @@ const menuId = 22;
 // Di mintahargaRoutes.js
 router.get("/divisi", verifyToken, ctrl.getDivisi);
 router.get("/", verifyToken, checkPermission(menuId, "view"), ctrl.getBrowse);
+router.get("/detail/:nomor", verifyToken, checkPermission(menuId, "view"), ctrl.getDetail);
 
 router.post(
   "/delete-kalkulasi/:nomor",

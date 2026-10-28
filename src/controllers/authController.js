@@ -1,4 +1,5 @@
 const authService = require("../services/authService");
+const db = require("../config/database");
 
 const login = async (req, res) => {
   try {
@@ -18,8 +19,27 @@ const login = async (req, res) => {
   }
 };
 
-const me = (req, res) => {
-  res.status(200).json({ success: true, data: req.user });
+const me = async (req, res) => {
+  try {
+    let menus = [];
+    if (req.user?.kode) {
+      const [menuRows] = await db.query(
+        `SELECT hak_men_id AS menu_id,
+                IFNULL(hak_men_view,   'N') AS hak_view,
+                IFNULL(hak_men_insert, 'N') AS hak_insert,
+                IFNULL(hak_men_edit,   'N') AS hak_edit,
+                IFNULL(hak_men_delete, 'N') AS hak_delete,
+                'N' AS hak_print
+         FROM thakuser
+         WHERE hak_user_kode = ?`,
+        [req.user.kode]
+      );
+      menus = menuRows;
+    }
+    res.status(200).json({ success: true, data: { ...req.user, menus } });
+  } catch (e) {
+    res.status(200).json({ success: true, data: req.user });
+  }
 };
 
 const changePassword = async (req, res) => {
