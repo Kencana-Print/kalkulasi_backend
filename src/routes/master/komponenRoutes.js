@@ -13,7 +13,7 @@ router.get("/", verifyToken, checkPermission(menuId, "view"), ctrl.getAll);
 router.post(
   "/save",
   verifyToken,
-  checkPermission(menuId, "insert"),
+  checkPermission(menuId, "save"),
   ctrl.saveData
 );
 router.delete(

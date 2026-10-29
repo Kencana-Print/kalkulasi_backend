@@ -12,8 +12,8 @@ const menuId = 11;
 router.get("/", verifyToken, checkPermission(menuId, "view"), ctrl.getAll);
 router.get("/options", verifyToken, checkPermission(menuId, "view"), ctrl.getOptions);
 router.get("/:kode", verifyToken, checkPermission(menuId, "view"), ctrl.getDetail);
-router.post("/save", verifyToken, checkPermission(menuId, "insert"), ctrl.saveData);
-router.put("/:kode", verifyToken, checkPermission(menuId, "edit"), ctrl.saveData);
+router.post("/save", verifyToken, checkPermission(menuId, "save"), ctrl.saveData);
+router.put("/:kode", verifyToken, checkPermission(menuId, "save"), ctrl.saveData);
 router.delete("/:kode", verifyToken, checkPermission(menuId, "delete"), ctrl.deleteData);
 
 module.exports = router;

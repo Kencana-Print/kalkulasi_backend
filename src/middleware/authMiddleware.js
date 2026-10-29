@@ -40,13 +40,12 @@ const verifyToken = (req, res, next) => {
 const checkPermission = (menuId, action) => {
   return async (req, res, next) => {
     try {
-      if (req.user?.kode?.toUpperCase() === "ADMIN") return next();
-
       const colMap = {
         view: "hak_men_view",
         insert: "hak_men_insert",
         edit: "hak_men_edit",
         delete: "hak_men_delete",
+        save: "hak_men_save",
       };
       const col = colMap[action];
       if (!col)
@@ -54,16 +53,27 @@ const checkPermission = (menuId, action) => {
           .status(400)
           .json({ success: false, message: "Action tidak valid." });
 
+      // Action non-save: izinkan bypass ADMIN
+      if (action !== "save" && req.user?.kode?.toUpperCase() === "ADMIN") {
+        return next();
+      }
+
+      const menuIds = Array.isArray(menuId) ? menuId : [menuId];
       const [rows] = await db.query(
         `SELECT ${col} AS permission FROM thakuser 
-         WHERE hak_user_kode = ? AND hak_men_id = ? LIMIT 1`,
-        [req.user.kode, menuId],
+         WHERE hak_user_kode = ? AND hak_men_id IN (?)`,
+        [req.user.kode, menuIds],
       );
 
-      if (rows.length === 0 || rows[0].permission !== "Y")
-        return res
-          .status(403)
-          .json({ success: false, message: "Akses ditolak." });
+      const hasPermission = rows.some((r) => r.permission === "Y");
+
+      if (!hasPermission) {
+        const message =
+          action === "save"
+            ? "Anda tidak punya akses untuk menyimpan data."
+            : "Akses ditolak.";
+        return res.status(403).json({ success: false, message });
+      }
 
       next();
     } catch (err) {

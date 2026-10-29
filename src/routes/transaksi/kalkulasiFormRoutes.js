@@ -45,13 +45,13 @@ router.get(
 router.post(
   "/save",
   verifyToken,
-  checkPermission(MENU_ID, "insert"),
+  checkPermission([21, 22], "save"),
   controller.save,
 );
 router.put(
   "/save",
   verifyToken,
-  checkPermission(MENU_ID, "edit"),
+  checkPermission([21, 22], "save"),
   controller.save,
 );
 

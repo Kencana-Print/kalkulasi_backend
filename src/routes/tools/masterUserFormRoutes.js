@@ -26,6 +26,6 @@ router.get(
   checkPermission(menuId, "view"),
   ctrl.getDetail,
 );
-router.post("/save", verifyToken, checkPermission(menuId, "insert"), ctrl.save);
+router.post("/save", verifyToken, checkPermission(menuId, "save"), ctrl.save);
 
 module.exports = router;

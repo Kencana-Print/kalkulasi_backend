@@ -29,6 +29,7 @@ const me = async (req, res) => {
                 IFNULL(hak_men_insert, 'N') AS hak_insert,
                 IFNULL(hak_men_edit,   'N') AS hak_edit,
                 IFNULL(hak_men_delete, 'N') AS hak_delete,
+                IFNULL(hak_men_save,   'N') AS hak_save,
                 'N' AS hak_print
          FROM thakuser
          WHERE hak_user_kode = ?`,

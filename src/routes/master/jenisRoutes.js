@@ -6,14 +6,14 @@ const {
   checkPermission,
 } = require("../../middleware/authMiddleware");
 
-// Sesuaikan menuId jika master jenis kain memiliki ID menu tersendiri
-const menuId = 9;
+// men_id 6 = frmBrowJenis (Master Jenis Kain) di tmenu
+const menuId = 6;
 
 router.get("/", verifyToken, checkPermission(menuId, "view"), ctrl.getAll);
 router.post(
   "/save",
   verifyToken,
-  checkPermission(menuId, "insert"),
+  checkPermission(menuId, "save"),
   ctrl.saveData
 );
 router.delete(

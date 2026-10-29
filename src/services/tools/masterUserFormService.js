@@ -3,9 +3,9 @@ const db = require("../../config/database");
 // ── Daftar cabang ─────────────────────────────────────────────────────
 const getCabangList = async () => {
   const [rows] = await db.query(
-    `SELECT cabang FROM finance.tcabang ORDER BY cabang`,
+    `SELECT c_kode cab FROM kalkulasi.tcabang ORDER BY c_kode`,
   );
-  return rows.map((r) => r.cabang);
+  return rows.map((r) => r.cab);
 };
 
 // ── Daftar menu (men_modul=1 = Kalkulasi) ──────────────────────────────
@@ -43,7 +43,8 @@ const getDetail = async (kode) => {
        hak_men_view    AS view_,
        hak_men_insert  AS insert_,
        hak_men_edit    AS edit_,
-       hak_men_delete  AS delete_
+       hak_men_delete  AS delete_,
+       hak_men_save    AS save_
      FROM thakuser
      WHERE hak_user_kode = ?`,
     [kode],
@@ -54,7 +55,7 @@ const getDetail = async (kode) => {
 
 // ── Simpan user + hak akses ──────────────────────────────────────────
 const save = async (data, isEdit) => {
-  const { kode, nama, password, cabang, aktif, editReport, menus } = data;
+  const { kode, nama, password, cabang, aktif, menus } = data;
 
   if (!kode || !kode.trim()) throw new Error("Kode user wajib diisi.");
   if (!nama || !nama.trim()) throw new Error("Nama user wajib diisi.");
@@ -68,7 +69,7 @@ const save = async (data, isEdit) => {
          user_aktif        = ?,
          date_modify       = NOW()
        WHERE user_kode = ?`,
-      [nama, password ?? "", cabang, aktif, editReport ?? 0, kode],
+      [nama, password ?? "", cabang, aktif, kode],
     );
   } else {
     const [[existing]] = await db.query(
@@ -81,7 +82,7 @@ const save = async (data, isEdit) => {
       `INSERT INTO tuser
          (user_kode, user_nama, user_password, user_cabang,
           user_aktif, date_create)
-       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+       VALUES (?, ?, ?, ?, ?, NOW())`,
       [kode, nama, password ?? "", cabang, aktif ?? 0],
     );
   }
@@ -95,21 +96,23 @@ const save = async (data, isEdit) => {
         m.view_ === "Y" ||
         m.insert_ === "Y" ||
         m.edit_ === "Y" ||
-        m.delete_ === "Y",
+        m.delete_ === "Y" ||
+        m.save_ === "Y",
     );
 
     if (filtered.length > 0) {
       const values = filtered.map((m) => [
         kode,
         m.menu_id,
-        m.view_ || "N",
-        m.insert_ || "N",
-        m.edit_ || "N",
-        m.delete_ || "N",
+        m.view_ === "Y" ? "Y" : "N",
+        m.insert_ === "Y" ? "Y" : "N",
+        m.edit_ === "Y" ? "Y" : "N",
+        m.delete_ === "Y" ? "Y" : "N",
+        m.save_ === "Y" ? "Y" : "N",
       ]);
       await db.query(
         `INSERT INTO thakuser
-           (hak_user_kode, hak_men_id, hak_men_view, hak_men_insert, hak_men_edit, hak_men_delete)
+           (hak_user_kode, hak_men_id, hak_men_view, hak_men_insert, hak_men_edit, hak_men_delete, hak_men_save)
          VALUES ?`,
         [values],
       );
