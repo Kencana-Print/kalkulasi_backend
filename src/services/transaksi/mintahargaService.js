@@ -15,6 +15,7 @@ const getBrowse = async (startDate, endDate, divisi, status) => {
   let sql = `
     SELECT 
       h.mh_nomor AS Nomor,
+      IFNULL(sp.sp_status, '') AS StatusPenawaran,
       v.Divisi,
       DATE_FORMAT(h.mh_tanggal, '%d-%m-%Y') AS Tanggal,
       DATE_FORMAT(h.mh_apv, '%d-%m-%Y %T') AS Approved,
@@ -58,6 +59,22 @@ const getBrowse = async (startDate, endDate, divisi, status) => {
     FROM kencanaprint.tmintaharga h
     LEFT JOIN kencanaprint.tdivisi v ON v.kode = h.mh_divisi
     LEFT JOIN kencanaprint.tsales s ON s.sal_kode = h.mh_sal_kode
+    LEFT JOIN (
+      SELECT x.pend_minta, x.pend_status AS sp_status
+      FROM (
+        SELECT pd.pend_minta,
+               CASE WHEN IFNULL(pd.pend_status, '') = '' THEN 'OPEN' ELSE pd.pend_status END AS pend_status,
+               ROW_NUMBER() OVER (
+                 PARTITION BY pd.pend_minta
+                 ORDER BY ph.date_create DESC, pd.pend_urutan DESC
+               ) AS rn
+        FROM kencanaprint.tpenawaran_dtl pd
+        INNER JOIN kencanaprint.tpenawaran_hdr ph
+          ON ph.pen_nomor = pd.pend_pen_nomor
+        WHERE IFNULL(pd.pend_minta, '') <> ''
+      ) x
+      WHERE x.rn = 1
+    ) sp ON sp.pend_minta = h.mh_nomor
     WHERE h.mh_tanggal BETWEEN ? AND ?
   `;
 
