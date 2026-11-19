@@ -1,14 +1,9 @@
+const fs = require("fs");
+const path = require("path");
 const service = require("../../services/transaksi/kalkulasiFormService");
 
-// Base URL server file gambar desain Minta Harga (static host, tanpa API).
-const IMAGE_BASE =
-  process.env.MINTAHARGA_IMAGE_BASE ||
-  "http://103.94.238.252:8182/images/mintaharga";
+const IMAGE_DIR = "/mnt/image/mintaharga";
 
-// --- Proxy gambar desain Minta Harga (<nomorMH>.jpg) ---
-// <img> browser tidak bisa membawa header JWT, jadi endpoint ini publik
-// (tanpa verifyToken). Nomor divalidasi ketat agar tak bisa dipakai SSRF,
-// dan hanya file .jpg di bawah IMAGE_BASE yang boleh diambil.
 const getGambarMintaharga = (req, res) => {
   const nomor = String(req.params.nomor || "");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$/.test(nomor)) {
@@ -16,37 +11,16 @@ const getGambarMintaharga = (req, res) => {
       .status(400)
       .json({ success: false, message: "Nomor gambar tidak valid." });
   }
-  // Frontend sudah menyertakan ".jpg" di URL (…/MH.2026.3136.jpg) — jangan
-  // ditambah lagi. Hanya tambahkan ekstensi bila nomor belum punya.
   const file = /\.(jpe?g|png|gif|webp|bmp)$/i.test(nomor) ? nomor : `${nomor}.jpg`;
-  const target = `${IMAGE_BASE}/${file}`;
-  const client = target.startsWith("https:") ? require("https") : require("http");
-  try {
-    const proxy = client.get(target, (upstream) => {
-      if (upstream.statusCode !== 200) {
-        upstream.resume();
-        return res
-          .status(404)
-          .json({ success: false, message: "Gambar tidak ditemukan." });
-      }
-      res.setHeader(
-        "Content-Type",
-        upstream.headers["content-type"] || "image/jpeg",
-      );
-      res.setHeader("Cache-Control", "public, max-age=86400");
-      upstream.pipe(res);
-    });
-    proxy.on("error", () =>
-      res
-        .status(502)
-        .json({ success: false, message: "Server gambar tidak terjangkau." }),
-    );
-    proxy.setTimeout(10000, () => proxy.destroy(new Error("timeout")));
-  } catch (e) {
-    res
-      .status(502)
-      .json({ success: false, message: "Server gambar tidak terjangkau." });
+  const filePath = path.join(IMAGE_DIR, file);
+  if (!fs.existsSync(filePath)) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Gambar tidak ditemukan." });
   }
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  fs.createReadStream(filePath).pipe(res);
 };
 
 // --- Detail Kalkulasi (mode edit) ---

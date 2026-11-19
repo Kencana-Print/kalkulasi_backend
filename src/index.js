@@ -79,6 +79,7 @@ app.use(
 
 app.use(express.json());
 app.use("/images", express.static(path.join(process.cwd(), "public/images")));
+app.use("/file-gambar", express.static("/mnt/image"));
 
 // Endpoint untuk cek versi backend
 app.get("/api/system/info", systemCtrl.getSystemInfo);
@@ -160,8 +161,8 @@ const FRONTEND_DIST =
   path.join(process.cwd(), "..", "kalkulasi_frontend", "dist");
 if (FRONTEND_DIST && fs.existsSync(FRONTEND_DIST)) {
   app.use(express.static(FRONTEND_DIST));
-  // SPA fallback — jangan telan /api & /images
-  app.get(/^\/(?!api(\/|$)|images(\/|$)).*/, (req, res) => {
+  // SPA fallback — jangan telan /api, /images & /file-gambar
+  app.get(/^\/(?!api(\/|$)|images(\/|$)|file-gambar(\/|$)).*/, (req, res) => {
     res.sendFile(path.join(FRONTEND_DIST, "index.html"));
   });
   console.log(`📦 Serving frontend from ${FRONTEND_DIST}`);
